@@ -1,0 +1,5 @@
+anomalib
+torch
+torchvision
+numpy
+torchmetrics
