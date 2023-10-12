@@ -1,0 +1,2 @@
+# mag
+fri mag code
