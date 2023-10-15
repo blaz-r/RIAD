@@ -25,23 +25,24 @@ class MSGMS(nn.Module):
 
     def forward(self, img: Tensor, img_r: Tensor, as_map: bool = False) -> Tensor:
         b, _, h, w = img.shape
-        gms_list = []
+        if as_map:
+            msgsm = torch.zeros(b, 1, h, w, device=img.device)
+        else:
+            msgsm = 0
+
         # multiscale, first one is non rescaled, following ones are halved
         for scale in range(self.num_scales):
-            gms_list.append(self.gms(img, img_r))
+            gms = self.gms(img, img_r)
+            if as_map:
+                msgsm += F.interpolate(gms, size=(h, w), mode="bilinear", align_corners=False)
+            else:
+                msgsm += torch.mean(gms)
 
             img = F.avg_pool2d(img, kernel_size=2, stride=2)
             img_r = F.avg_pool2d(img_r, kernel_size=2, stride=2)
 
-        if as_map:
-            # upscale and join all maps into one
-            msgms_map = torch.zeros(b, 1, h, w, device=img.device)
-            for gms_map in gms_list:
-                msgms_map += F.interpolate(gms_map, size=(h, w), mode="bilinear", align_corners=False)
-            return msgms_map / self.num_scales
-
-        # return single value: sum(mean(gms)) / num_scales == mean(mean(gms))
-        return torch.mean(torch.Tensor([torch.mean(gms_map) for gms_map in gms_list]))
+        # if map, return per pixel avg of all scales, else return total average
+        return msgsm / self.num_scales
 
     def gms(self, img: Tensor, img_r: Tensor) -> Tensor:
         gi_x = F.conv2d(img, self.prewitt_x, stride=1, padding=1)
@@ -100,9 +101,8 @@ if __name__ == "__main__":
     loss = MSGMSLoss().cuda()
 
     x = torch.rand(4, 3, 50, 50)
-    y = torch.rand(4, 3, 50, 50)
 
-    print(loss(x.cuda(), y.cuda()))
+    print(loss(x.cuda(), x.cuda() * 0.75))
 
     msgsm = MSGMS().cuda()
     map = msgsm(x.cuda(), x.cuda(), as_map=True)
