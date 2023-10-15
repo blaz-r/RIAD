@@ -23,8 +23,9 @@ class RIAD(nn.Module):
             category="bottle",
             image_size=(256, 256),
             train_batch_size=4,
-            eval_batch_size=1,
+            eval_batch_size=4,
             num_workers=0,
+            seed=42
         )
         self.datamodule.setup()
 
@@ -36,7 +37,7 @@ class RIAD(nn.Module):
         self.num_masks = 3
         self.mean_kernel = nn.Parameter(torch.ones(1, 1, 21, 21) / 21 ** 2)
 
-        self.optimizer = torch.optim.AdamW(params=self.unet.parameters() ,lr=0.0001)
+        self.optimizer = torch.optim.AdamW(params=self.unet.parameters(), lr=0.0001)
         self.scheduler = torch.optim.lr_scheduler.StepLR(optimizer=self.optimizer,
                                                          step_size=250, gamma=0.1)
 
@@ -58,7 +59,7 @@ class RIAD(nn.Module):
         # final map is avg of maps at all coutout sizes
         anomaly_map /= len(self.cutout_sizes)
 
-        return {"anomaly_map": anomaly_map, "anomaly_score": torch.max(anomaly_map)}
+        return anomaly_map
 
     def reconstruct(self, input: Tensor, cutout_size: int):
         disjoint_masks = self.create_masks(input.shape, cutout_size, input.device)
@@ -149,14 +150,14 @@ class RIAD(nn.Module):
         img_auroc, pixel_auroc = AUROC().cpu(), AUROC().cpu()
 
         test_loader = self.datamodule.test_dataloader()
-        for batch in tqdm(test_loader):
-            image_batch = batch["image"].to(device)
-            results = self.forward(image_batch)
+        with torch.no_grad():
+            for batch in tqdm(test_loader):
+                image_batch = batch["image"].to(device)
+                anomaly_map = self.forward(image_batch).detach().cpu()
 
-            img_auroc.update(results["anomaly_score"].detach().cpu(), batch["label"].detach().cpu())
-            anomaly_map = results["anomaly_map"].detach().cpu()
-            norm_anomaly_map = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min())
-            pixel_auroc.update(norm_anomaly_map, batch["mask"].detach().cpu())
+                norm_anomaly_map = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min())
+                pixel_auroc.update(norm_anomaly_map, batch["mask"].detach().cpu())
+                img_auroc.update(anomaly_map.reshape(anomaly_map.shape[0], -1).max(dim=1).values, batch["label"].detach().cpu())
 
         i_auroc_val = img_auroc.compute().item()
         p_auroc_val = pixel_auroc.compute().item()
