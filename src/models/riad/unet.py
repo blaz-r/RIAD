@@ -8,14 +8,17 @@ class UNetBlockBasic(nn.Module):
         self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
 
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+
         self.relu = nn.functional.relu
 
     def forward(self, x):
         c1 = self.conv1(x)
-        a1 = self.relu(c1)
+        a1 = self.relu(self.bn1(c1))
 
         c2 = self.conv2(a1)
-        a2 = self.relu(c2)
+        a2 = self.relu(self.bn2(c2))
 
         return a2
 
