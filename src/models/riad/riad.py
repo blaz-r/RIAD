@@ -154,7 +154,9 @@ class RIAD(nn.Module):
             results = self.forward(image_batch)
 
             img_auroc.update(results["anomaly_score"].detach().cpu(), batch["label"].detach().cpu())
-            pixel_auroc.update(results["anomaly_map"].detach().cpu(), batch["mask"].detach().cpu())
+            anomaly_map = results["anomaly_map"].detach().cpu()
+            norm_anomaly_map = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min())
+            pixel_auroc.update(norm_anomaly_map, batch["mask"].detach().cpu())
 
         i_auroc_val = img_auroc.compute().item()
         p_auroc_val = pixel_auroc.compute().item()
