@@ -27,6 +27,7 @@ class RIAD(nn.Module):
             num_workers=0,
             seed=42
         )
+        torch.manual_seed(42)
         self.datamodule.setup()
 
         self.unet = UNet(in_channels=3, out_channels=3, transpose=False)
@@ -79,7 +80,7 @@ class RIAD(nn.Module):
 
         grid_h, grid_w = h // cutout_size, w // cutout_size
         num_cells = grid_w * grid_h
-        random_indices = torch.randperm(num_cells)
+        random_indices = torch.randperm(num_cells, requires_grad=False)
 
         disjoint_masks = []
         # split random pixels into num_masks chunks
@@ -97,7 +98,7 @@ class RIAD(nn.Module):
         return disjoint_masks
 
     def mean_smoothing(self, input_map: Tensor) -> Tensor:
-        return F.conv2d(input_map, self.mean_kernel, padding=21 // 2)
+        return F.conv2d(input_map, self.mean_kernel, padding="same")
 
     def save_model(self, name: str):
         print("Saving model")
@@ -105,7 +106,7 @@ class RIAD(nn.Module):
 
     def load_model(self, name):
         print("Loading model")
-        self.load_state_dict(torch.load(f"models/riad/checkpoints/{name}.pth"))
+        self.load_state_dict(torch.load(f"models/riad/checkpoints/{name}"))
 
     def train_riad(self, device: torch.device):
         self.train()
@@ -174,6 +175,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = RIAD()
+    model.load_model("model_857p_723i.pth")
 
-    model.train_riad(device)
+    #model.train_riad(device)
     model.test_riad(device)
