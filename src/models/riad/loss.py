@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 import torch.nn as nn
+from torchvision.transforms.v2 import Grayscale
 
 
 class SSIMLoss(nn.Module):
@@ -11,7 +12,7 @@ class SSIMLoss(nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure()
 
     def forward(self, img: Tensor, img_r: Tensor) -> Tensor:
-        return 1 - self.ssim(img, img_r).mean()
+        return 1 - self.ssim(img_r, img)
 
 
 class MSGMS(nn.Module):
@@ -19,9 +20,9 @@ class MSGMS(nn.Module):
         super().__init__()
         self.num_scales = 4
 
-        self.prewitt_x: nn.Parameter = None
-        self.prewitt_y: nn.Parameter = None
-        self.create_prewitt_kernel()
+        self.prewitt_x = nn.Parameter(torch.Tensor([[[[1, 0, -1], [1, 0, -1], [1, 0, -1]]]]) / 3.0)
+        self.prewitt_y = nn.Parameter(torch.Tensor([[[[1, 1, 1], [0, 0, 0], [-1, -1, -1]]]]) / 3.0)
+        self.to_gray = Grayscale()
 
     def forward(self, img: Tensor, img_r: Tensor, as_map: bool = False) -> Tensor:
         b, _, h, w = img.shape
@@ -45,6 +46,9 @@ class MSGMS(nn.Module):
         return msgsm / self.num_scales
 
     def gms(self, img: Tensor, img_r: Tensor) -> Tensor:
+        img = self.to_gray(img)
+        img_r = self.to_gray(img_r)
+
         gi_x = F.conv2d(img, self.prewitt_x, stride=1, padding=1)
         gi_y = F.conv2d(img, self.prewitt_y, stride=1, padding=1)
         gi = torch.sqrt(gi_x**2 + gi_y**2)
@@ -58,14 +62,6 @@ class MSGMS(nn.Module):
 
         gsm = (2 * gi * gir + c) / (gi**2 + gir**2 + c)
         return gsm
-
-    def create_prewitt_kernel(self):
-        # (1, 1, 3, 3)
-        prewitt_x = torch.Tensor([[[[1, 0, -1], [1, 0, -1], [1, 0, -1]]]]) / 3.0
-        # (out_c, in_c, h, w) - (1, 3, 3, 3)
-        self.prewitt_x = nn.Parameter(prewitt_x.repeat(1, 3, 1, 1))
-        prewitt_y = torch.Tensor([[[[1, 1, 1], [0, 0, 0], [-1, -1, -1]]]]) / 3.0
-        self.prewitt_y = nn.Parameter(prewitt_y.repeat(1, 3, 1, 1))
 
 
 class MSGMSLoss(nn.Module):
@@ -98,12 +94,18 @@ class RIADLoss(nn.Module):
 
 
 if __name__ == "__main__":
-    loss = MSGMSLoss().cuda()
+    from kornia.losses import ssim_loss
+    loss = SSIMLoss()
 
     x = torch.rand(4, 3, 50, 50)
+    y = torch.rand(4, 3, 50, 50)
 
-    print(loss(x.cuda(), x.cuda() * 0.75))
+    print(loss(x, y))
+    print(ssim_loss(x, y, 11) * 2)
 
-    msgsm = MSGMS().cuda()
-    map = msgsm(x.cuda(), x.cuda(), as_map=True)
-    print(map.shape)
+    # msgsm = MSGMS().cuda()
+    # map = msgsm(x.cuda(), x.cuda(), as_map=True)
+    # print(map.shape)
+
+    msgms = MSGMSLoss()
+    print(msgms(x, y))
