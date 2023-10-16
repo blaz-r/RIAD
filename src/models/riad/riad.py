@@ -54,7 +54,7 @@ class RIAD(nn.Module):
             reconstructed = self.reconstruct(input, cutout_size)
             msgms = self.msgms(input, reconstructed, as_map=True)
             # get anomaly map at current scale by subtracting smoothed msgms from 1
-            anomaly_map += 1 - self.mean_smoothing(msgms)
+            anomaly_map += self.mean_smoothing(1 - msgms)
 
         # final map is avg of maps at all coutout sizes
         anomaly_map /= len(self.cutout_sizes)
