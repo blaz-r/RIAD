@@ -116,19 +116,22 @@ class RIAD(nn.Module):
         epochs = 300
         for epoch in range(epochs):
             train_loader = self.datamodule.train_dataloader()
+            total_loss = 0
             with tqdm(total=len(train_loader), desc=str(epoch) + "/" + str(epochs), miniters=int(1),
                       unit='batch') as prog_bar:
-                for batch in train_loader:
+                for i, batch in enumerate(train_loader):
                     self.optimizer.zero_grad()
 
                     image_batch = batch["image"].to(device)
                     reconstructed = self.forward(image_batch)
 
                     loss = self.loss(image_batch, reconstructed)
+                    total_loss += loss.detach().cpu().item()
                     loss.backward()
                     self.optimizer.step()
 
-                    prog_bar.set_postfix(**{'loss': np.round(loss.data.cpu().detach().numpy(), 5)})
+                    prog_bar.set_postfix(**{"batch_loss": np.round(loss.data.cpu().detach().numpy(), 5),
+                                            "avg_loss": np.round(total_loss / (i + 1), 5)})
                     prog_bar.update(1)
 
             self.scheduler.step()
