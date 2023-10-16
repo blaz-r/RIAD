@@ -5,13 +5,13 @@ import torch
 class UNetBlockBasic(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UNetBlockBasic, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
 
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
 
-        self.relu = nn.functional.relu
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         c1 = self.conv1(x)
@@ -42,10 +42,16 @@ class UNetBlockDown(nn.Module):
 
 
 class UNetBlockConn(nn.Module):
-    def __init__(self, in_channels, mid_channels, out_channels):
+    def __init__(self, in_channels, mid_channels, out_channels, transpose=True):
         super(UNetBlockConn, self).__init__()
         self.u_basic = UNetBlockBasic(in_channels, mid_channels)
-        self.up_conv = nn.ConvTranspose2d(mid_channels, out_channels, 2, stride=2, bias=False)
+        if transpose:
+            self.up_conv = nn.ConvTranspose2d(mid_channels, out_channels, kernel_size=4, stride=2, padding=1)
+        else:
+            self.up_conv = nn.Sequential(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+                                         nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
+                                         nn.BatchNorm2d(out_channels),
+                                         nn.ReLU(inplace=True))
 
     def forward(self, x):
         c = self.u_basic(x)
@@ -56,10 +62,16 @@ class UNetBlockConn(nn.Module):
 
 
 class UNetBlockUp(nn.Module):
-    def __init__(self, in_channels, mid_channels, out_channels):
+    def __init__(self, in_channels, mid_channels, out_channels, transpose=True):
         super(UNetBlockUp, self).__init__()
         self.u_basic = UNetBlockBasic(in_channels, mid_channels)
-        self.up_conv = nn.ConvTranspose2d(mid_channels, out_channels, 2, stride=2, bias=False)
+        if transpose:
+            self.up_conv = nn.ConvTranspose2d(mid_channels, out_channels, kernel_size=4, stride=2, padding=1)
+        else:
+            self.up_conv = nn.Sequential(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+                                         nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
+                                         nn.BatchNorm2d(out_channels),
+                                         nn.ReLU(inplace=True))
 
     def forward(self, x, skip):
         skip_cat = torch.concat((skip, x), 1)
@@ -75,7 +87,7 @@ class UNetBlockOut(nn.Module):
     def __init__(self, in_channels, mid_channels, out_channels):
         super(UNetBlockOut, self).__init__()
         self.u_basic = UNetBlockBasic(in_channels, mid_channels)
-        self.out_c = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
+        self.out_c = nn.Conv2d(mid_channels, out_channels, 3, padding=1)
 
     def forward(self, x, skip):
         skip_cat = torch.concat((skip, x), 1)
@@ -88,7 +100,7 @@ class UNetBlockOut(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3):
+    def __init__(self, in_channels=3, out_channels=3, transpose=True):
         super(UNet, self).__init__()
 
         self.down1 = UNetBlockDown(in_channels, 64)
@@ -96,10 +108,10 @@ class UNet(nn.Module):
         self.down3 = UNetBlockDown(128, 256)
         self.down4 = UNetBlockDown(256, 512)
 
-        self.conn_c = UNetBlockConn(512, 1024, 512)
-        self.up1 = UNetBlockUp(1024, 512, 256)
-        self.up2 = UNetBlockUp(512, 256, 128)
-        self.up3 = UNetBlockUp(256, 128, 64)
+        self.conn_c = UNetBlockConn(512, 1024, 512, transpose)
+        self.up1 = UNetBlockUp(1024, 512, 256, transpose)
+        self.up2 = UNetBlockUp(512, 256, 128, transpose)
+        self.up3 = UNetBlockUp(256, 128, 64, transpose)
         self.out = UNetBlockOut(128, 64, out_channels)
 
     def forward(self, x):
