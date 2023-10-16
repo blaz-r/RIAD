@@ -20,7 +20,7 @@ class RIAD(nn.Module):
         super().__init__()
         self.datamodule = MVTec(
             root="../../../datasets/mvtec",
-            category="bottle",
+            category="cable",
             image_size=(256, 256),
             train_batch_size=4,
             eval_batch_size=4,
@@ -29,7 +29,7 @@ class RIAD(nn.Module):
         )
         self.datamodule.setup()
 
-        self.unet = UNet(in_channels=3, out_channels=3)
+        self.unet = UNet(in_channels=3, out_channels=3, transpose=False)
         self.loss = RIADLoss()
         self.msgms = MSGMS()
 
