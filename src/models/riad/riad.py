@@ -111,7 +111,7 @@ class RIAD(nn.Module):
         self.train()
         self.to(device)
 
-        best_auroc = 0
+        best_p_auroc, best_i_auroc = 0, 0
 
         epochs = 300
         for epoch in range(epochs):
@@ -136,12 +136,12 @@ class RIAD(nn.Module):
 
             self.scheduler.step()
 
-            if epoch % 50 == 0:
+            if epoch % 20 == 0:
                 i_auroc, p_auroc = self.test_riad(device)
-                avg_auroc = (i_auroc + p_auroc) / 2
-                if avg_auroc > best_auroc:
-                    best_auroc = avg_auroc
-                    self.save_model(f"{avg_auroc*1000:.0f}")
+                if i_auroc > best_i_auroc or p_auroc > best_p_auroc:
+                    best_p_auroc = max(best_p_auroc, p_auroc)
+                    best_i_auroc = max(best_i_auroc, i_auroc)
+                    self.save_model(f"{p_auroc*1000:.0f}p_{i_auroc*1000:.0f}i")
                 self.train()
 
         self.save_model("last")
