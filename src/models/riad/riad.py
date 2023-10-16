@@ -19,7 +19,7 @@ class RIAD(nn.Module):
     def __init__(self):
         super().__init__()
         self.datamodule = MVTec(
-            root="../../../datasets/mvtec",
+            root="../datasets/mvtec",
             category="cable",
             image_size=(256, 256),
             train_batch_size=4,
@@ -101,11 +101,11 @@ class RIAD(nn.Module):
 
     def save_model(self, name: str):
         print("Saving model")
-        torch.save(self.state_dict(), f"checkpoints/model_{name}.pth")
+        torch.save(self.state_dict(), f"models/riad/checkpoints/model_{name}.pth")
 
-    def load_model(self):
+    def load_model(self, name):
         print("Loading model")
-        self.load_state_dict(torch.load("checkpoints/model.pth"))
+        self.load_state_dict(torch.load(f"models/riad/checkpoints/{name}.pth"))
 
     def train_riad(self, device: torch.device):
         self.train()
@@ -160,7 +160,7 @@ class RIAD(nn.Module):
 
                 norm_anomaly_map = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min())
                 pixel_auroc.update(norm_anomaly_map, batch["mask"].detach().cpu())
-                img_auroc.update(anomaly_map.reshape(anomaly_map.shape[0], -1).max(dim=1).values, batch["label"].detach().cpu())
+                img_auroc.update(norm_anomaly_map.reshape(norm_anomaly_map.shape[0], -1).max(dim=1).values, batch["label"].detach().cpu())
 
         i_auroc_val = img_auroc.compute().item()
         p_auroc_val = pixel_auroc.compute().item()
